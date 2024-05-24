@@ -1,36 +1,84 @@
 const express = require('express');
+const sqlite3 = require('sqlite3').verbose();
+
 const app = express();
+const PORT = 3000;
 
-// Rota que retorna um código de status 200 OK
-app.get('/ok', (req, res) => {
-  res.status(200).send('Requisição bem-sucedida!');
+const db = new sqlite3.Database(':memory:');
+
+db.serialize(() => {
+    db.run("CREATE TABLE IF NOT EXISTS tarefas (id INTEGER PRIMARY KEY, tarefa TEXT)");
 });
 
-// Rota que retorna um código de status 201 Created
-app.post('/created', (req, res) => {
-  // Lógica para criar um novo recurso
-  res.status(201).send('Recurso criado com sucesso!');
+app.use(express.json());
+
+app.post('/tarefas', (req, res) => {
+    const { tarefa } = req.body;
+  
+    db.run("INSERT INTO tarefas (tarefa) VALUES (?)", [tarefa], function(err) {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        res.status(201).json({ id: this.lastID, tarefa });
+    });
 });
 
-// Rota que retorna um código de status 400 Bad Request
-app.get('/bad-request', (req, res) => {
-    // Lógica para tratar uma requisição malformada
-  res.status(400).send('Requisição malformada!');
+app.get('/tarefas', (req, res) => {
+  
+    db.all("SELECT * FROM tarefas", [], (err, rows) => {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        res.status(200).json(rows);
+    });
 });
 
-// Rota que retorna um código de status 404 Not Found
-app.get('/not-found', (req, res) => {
-  // Lógica para lidar com recurso não encontrado
-  res.status(404).send('Recurso não encontrado!');
+app.get('/tarefas/:id', (req, res) => {
+    const { id } = req.params;
+  
+    db.get("SELECT * FROM tarefas WHERE id = ?", [id], (err, row) => {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        if (row) {
+            res.status(200).json(row);
+        } else {
+            res.status(404).json({ error: 'Tarefa não encontrada!' });
+        }
+    });
 });
 
-// Rota que retorna um código de status 500 Internal Server Error
-app.get('/server-error', (req, res) => {
-  // Lógica para lidar com erro interno do servidor
-  res.status(500).send('Erro interno do servidor!');
+app.put('/tarefas/:id', (req, res) => {
+    const { id } = req.params;
+    const { tarefa } = req.body;
+  
+    db.run("UPDATE tarefas SET tarefa = ? WHERE id = ?", [tarefa, id], function(err) {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        if (this.changes) {
+            res.status(200).json({ message: 'Tarefa atualizada com sucesso!' });
+        } else {
+            res.status(404).json({ error: 'Tarefa não encontrada!' });
+        }
+    });
 });
 
-const PORT = process.env.PORT || 3000;
+app.delete('/tarefas/:id', (req, res) => {
+    const { id } = req.params;
+  
+    db.run("DELETE FROM tarefas WHERE id = ?", [id], function(err) {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        if (this.changes) {
+            res.status(200).json({ message: 'Tarefa removida com sucesso!' });
+        } else {
+            res.status(404).json({ error: 'Tarefa não encontrada!' });
+        }
+    });
+});
+
 app.listen(PORT, () => {
-  console.log(`Servidor rodando na porta ${PORT}`);
-});
+    console.log(`Servidor rodando na porta http://localhost:${PORT}`)
+})
